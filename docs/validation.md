@@ -21,3 +21,13 @@ No browser interaction or live Auth integration test was performed. Database acc
 - Lint and the production build passed.
 - Local HTTP checks passed for all five role selections and corresponding persona pages, missing-session redirect, invalid-role rejection, cross-origin POST rejection, relative redirect preservation, and clearing the demo cookie through Exit demo.
 - Demo role selection stores only a fictional persona cookie; no Supabase session or database access is created.
+
+## Phase 2 core ticket implementation — 2026-10-28
+
+Implemented both local persistent demo storage and Supabase RPC-backed ticket workflows. Sixteen automated tests passed, including disk reopening, customer isolation, role permissions, private evidence download denial, upload validation, PostgreSQL migration execution, transactional RPCs, RLS visibility, resolution/reopening/confirmation and sanitized unique outbox events. Embedded PostgreSQL tests stub the Auth/Storage service surfaces and do not constitute live Supabase acceptance.
+
+The localhost HTTP smoke test passed through customer creation, analyst investigation and private note, engineering assignment/status, CSM public update, customer-visible filtering, private/public attachments, cross-organization denial, disguised upload rejection, resolution, customer confirmation and closed history. All four customer screens and the internal ticket screen returned HTTP 200; customer HTML contained no private test records.
+
+Final checks passed: 16 tests across 4 files, ESLint with zero reported issues, TypeScript, and the Next.js production build. The build's broad-filesystem-tracing warning was corrected by scoping the SQLite path to `.data`. Node 22 still reports the expected experimental warning for its built-in SQLite API. Dependency installation audit reported zero known vulnerabilities.
+
+Browser automation could not initialize because the runtime reported a sandbox setup refresh error. Visual interaction QA is therefore not verified. Docker also remains unavailable, so live Supabase Auth, Storage, signed URL behavior and the local pgTAP suite are not verified. No remote migrations were applied automatically.

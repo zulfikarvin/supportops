@@ -1,0 +1,13 @@
+import Link from 'next/link';
+import { TicketTable } from '@/components/ticket-ui';
+import { pageContext } from '@/lib/tickets/page-context';
+import { listTickets } from '@/lib/tickets/service';
+import { categories, statuses, priorities, teams } from '@/lib/tickets/model';
+export default async function TicketsPage({searchParams}:{searchParams:Promise<Record<string,string|string[]|undefined>>}){
+  const ctx=await pageContext();const params=await searchParams;const q=typeof params.q==='string'?params.q:'';
+  const tickets=(await listTickets(ctx)).filter(ticket=>(!q||`${ticket.title} ${ticket.number} ${ticket.organization_name}`.toLowerCase().includes(q.toLowerCase()))&&(!params.status||ticket.status===params.status)&&(!params.priority||ticket.priority===params.priority)&&(!params.category||ticket.category===params.category)&&(!params.team||ticket.assigned_team===params.team));
+  const customer=ctx.actor.role==='customer';
+  return <><div className="flex flex-wrap items-center justify-between gap-4"><div><p className="eyebrow">{customer?'Customer portal':'Support operations'}</p><h1 className="page-title">{customer?'My tickets':'Ticket management'}</h1><p className="mt-2 text-sm text-slate-500">{customer?'Track issues and stay connected with your support team.':'Triage incoming issues and keep investigations moving.'}</p></div>{customer&&<Link href="/workspace/tickets/new" className="primary-link">+ Report an issue</Link>}</div>
+    <form className="panel my-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-5" action="/workspace/tickets"><label className="text-xs font-medium">Search<input name="q" defaultValue={q} placeholder="Title, ticket ID, organization" className="mt-2"/></label>{[['status','Status',statuses],['priority','Priority',priorities],['category','Category',categories],['team','Team',teams]].map(([name,label,values])=><label className="text-xs font-medium" key={String(name)}>{String(label)}<select className="mt-2" name={String(name)} defaultValue={typeof params[String(name)]==='string'?String(params[String(name)]):''}><option value="">All {String(label).toLowerCase()}s</option>{(values as readonly string[]).map(value=><option key={value}>{value}</option>)}</select></label>)}<div className="flex items-center gap-4"><button className="primary-link" type="submit">Apply filters</button><Link className="text-sm text-slate-500" href="/workspace/tickets">Clear</Link></div></form>
+    <p className="mb-3 text-xs text-slate-500">{tickets.length} matching ticket{tickets.length===1?'':'s'} · Times shown in Europe/Berlin</p><TicketTable tickets={tickets} customer={customer}/></>;
+}

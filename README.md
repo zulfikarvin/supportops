@@ -2,21 +2,23 @@
 
 Independent technical support portfolio for fictional people analytics incidents. Not affiliated with Crunchr. Synthetic data only; this MVP is not production certified for sensitive HR data.
 
-## Current milestone: Phase 1 foundation
+## Current milestone: Phase 2 core tickets
 
 ### Password-free demo access
 
-The app now defaults to demo mode. Open `/login`, choose one of five roles, and enter the fictional workspace without Supabase credentials. Switch roles from the workspace header or use Exit demo to clear the session. The selected persona is remembered in an HttpOnly cookie for eight hours. Ticket workflows remain planned for Phase 2.
+The app defaults to demo mode. Open `/login`, choose one of five roles, and enter without Supabase credentials. Switch roles from the workspace sidebar or use Exit demo. The selected persona is remembered in an HttpOnly cookie for eight hours. Tickets, messages, activity, notification events and evidence persist in a local SQLite database at `apps/web/.data/supportops.sqlite`. All roles share this synthetic dataset, so switching roles continues the same investigation. Demo customers belong to Atlas Industries; internal roles can also see Northstar and Meridian tickets.
 
-Demo mode does not log into Supabase or grant database permissions. To use the original authenticated mode, set `SUPPORTOPS_AUTH_MODE=supabase` in `apps/web/.env.local`, configure the Supabase values below, and restart the app. The demo endpoint is disabled in authenticated mode. The account provisioning instructions below apply only to Supabase mode.
+Demo mode does not log into Supabase or grant database permissions. To use authenticated mode, set `SUPPORTOPS_AUTH_MODE=supabase` in `apps/web/.env.local`, configure the Supabase values below, and restart the app. The demo endpoint is disabled in authenticated mode. Account provisioning applies only to Supabase mode. Local SQLite requires Node 22.17+ and a writable persistent disk; use Supabase mode on Vercel.
 
-Implemented: monorepo, Next.js App Router application, responsive sign-in and protected workspace, Supabase cookie/session clients, server-validated password login/logout, five administrator-managed roles, schema for all ten core tables, read-isolation RLS, private storage, synthetic organization seed, role unit tests and SQL security tests.
+Implemented: customer and internal dashboards, filtered/searchable ticket tables, issue submission, investigation controls, team/employee assignment, public replies and private notes, timestamped status history, resolution documentation, reopening, customer confirmation, and private attachments. The same UI uses either a persistent synthetic SQLite demo or Supabase Auth/RLS and transactional RPCs. Metrics are derived from stored tickets. Four fictional incidents are seeded into a new demo database.
 
-Ticket workflows, uploads, Realtime, diagnostics, analytics and n8n delivery are planned for subsequent phases. No browser-only ticket simulation or invented metrics are included. See [architecture](docs/architecture.md).
+Realtime, Python diagnostics, extended collaboration, full analytics and n8n delivery remain for subsequent phases. Ticket events already create a sanitized outbox, but no notifications are sent yet. See [architecture](docs/architecture.md) and the [Phase 2 walkthrough](docs/phase2-demo.md).
 
 ## Local setup (Windows PowerShell)
 
-Prerequisites: Node 22+, npm, Docker Desktop running with Linux containers. Use `npm.cmd` if PowerShell blocks npm.ps1. Supabase CLI is invoked through npx; no global installation is required.
+For the password-free demo, use Node 22.17+ and npm, then run `npm.cmd ci` and `npm.cmd run dev`. No Docker or environment file is needed. SQLite uses Node's experimental built-in API.
+
+For local Supabase mode, additionally start Docker Desktop with Linux containers. Use `npm.cmd` if PowerShell blocks npm.ps1. Supabase CLI is invoked through npx; no global installation is required.
 
 ```powershell
 npm.cmd ci
@@ -27,6 +29,8 @@ Copy-Item apps/web/.env.example apps/web/.env.local
 ```
 
 Replace the URL/key in `apps/web/.env.local` with the local API URL and publishable (or legacy anon) key from `supabase status`. Never use a service-role/secret key. Then:
+
+Set `SUPPORTOPS_AUTH_MODE=supabase` for this configuration. For attachments also set the **server-only** `SUPABASE_SECRET_KEY` to the project's secret key (the local legacy service-role key is also accepted by the SDK). It is used only for storage upload after user authorization and file-byte validation. Never prefix this variable with `NEXT_PUBLIC_`. Ticket reads and RPCs always use the user's session and public key.
 
 ```powershell
 npm.cmd run dev
@@ -69,20 +73,22 @@ npm.cmd run build
 npx.cmd supabase test db
 ```
 
-Database tests require a running local Supabase and the seed. They run in a rollback transaction and check cross-organization reads, note visibility, self-promotion, membership writes, internal reads, and outbox denial. Unit tests check the capability model; they do not prove RLS enforcement. Status persistence and notification delivery tests belong with the later implementation.
+`npm.cmd run test` includes persistent SQLite lifecycle tests and embedded PostgreSQL tests using PGlite. The latter execute both migrations and RLS/RPC assertions with stubbed Auth/Storage surfaces. They do not test live Supabase Auth, object upload, signed URLs or Realtime. `supabase test db` additionally runs the original pgTAP tests against a running local Supabase instance.
+
+With the demo server running, execute `node scripts/smoke-phase2.mjs` for the customer → analyst → Data Engineer → CSM → customer workflow. It creates one synthetic acceptance ticket and preserves its completed history. It checks private note/evidence isolation, downloads, unauthorized mutations, closure, and server-rendered pages.
 
 Manual Phase 1 acceptance: sign in as each provisioned role, verify the displayed database role, sign out, confirm `/workspace` redirects to login, and verify no role/membership editing is available. Live authentication cannot be verified without a provisioned instance.
 
 ## Vercel deployment
 
-Push this repository to your own GitHub repository. Import into Vercel, choose Next.js, and set Root Directory to `apps/web`, with workspace files outside the root included. Set the two `NEXT_PUBLIC_SUPABASE_*` values for the intended environment. Deploy only after migrations and database tests pass. Set the hosted Supabase Site URL to the Vercel URL. No service-role key is needed for Phase 1. Keep preview deployments on a separate development Supabase project.
+Import the GitHub repository into Vercel, choose Next.js, and set Root Directory to `apps/web`, with workspace files outside the root included. Set `SUPPORTOPS_AUTH_MODE=supabase`, both `NEXT_PUBLIC_SUPABASE_*` values, and `SUPABASE_SECRET_KEY` if attachments are needed. Apply both migrations before deployment. Set the hosted Supabase Site URL to the Vercel URL. Keep preview deployments on a separate development Supabase project. The SQLite demo does not provide durable storage on Vercel.
 
 ## Next milestones
 
-2. Transactional ticket RPCs, customer portal, investigation workspace, uploads and immutable activity.
+2. Implemented: core ticket workflows, uploads, role permissions and transactional activity history. Live Supabase service acceptance remains outstanding.
 3. Team capabilities, tested Realtime, resolution confirmation and outbox creation.
 4. FastAPI diagnostic validation, synthetic CSV fixtures and pytest.
 5. Authenticated n8n delivery, retries, idempotency and importable workflows.
 6. Analytics from stored records, security acceptance, UI review, deployment and full interview walkthrough.
 
-The requested 19-step interview scenario becomes an acceptance script after these phases; it is not yet available end to end.
+The current walkthrough covers the core support workflow. Python diagnostics, Realtime, and actual n8n delivery are not yet available.
