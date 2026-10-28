@@ -1,0 +1,5 @@
+@import "tailwindcss";
+@theme { --font-sans: Arial, Helvetica, sans-serif; }
+body { background: #f6f8fa; color: #172b3a; }
+input { width: 100%; border: 1px solid #cbd5e1; border-radius: .5rem; padding: .7rem; background: white; }
+input:focus-visible { outline: 2px solid #0f766e; outline-offset: 2px; }

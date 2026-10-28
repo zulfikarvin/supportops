@@ -1,0 +1,11 @@
+node_modules/
+.npm-cache/
+.next/
+.env*
+!.env.example
+coverage/
+__pycache__/
+.venv/
+.supabase/
+*.tsbuildinfo
+supabase/.temp/
