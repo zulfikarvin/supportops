@@ -7,6 +7,7 @@ export const priorities = ['low', 'normal', 'high', 'critical'] as const;
 export const teams = ['Support', 'Customer Success', 'Data Engineering', 'Product & Tech'] as const;
 export type Actor = { id: string; name: string; role: Role; organizationIds: string[] };
 export type Ticket = {
+  record_type?: 'incident'|'service_request'; business_impact?: string;
   id: string; number: number; organization_id: string; organization_name: string; created_by: string;
   title: string; description: string; category: typeof categories[number]; status: typeof statuses[number];
   priority: typeof priorities[number]; reported_urgency: typeof priorities[number]; first_occurred_at: string | null;
@@ -18,6 +19,7 @@ export type Entry = { id: string; ticket_id: string; created_by: string; author_
 export type Attachment = { id: string; ticket_id: string; filename: string; content_type: string; size_bytes: number; visibility: 'public' | 'internal'; created_at: string; object_path?: string };
 export type Detail = { ticket: Ticket; updates: Entry[]; activity: Entry[]; attachments: Attachment[] };
 export const createSchema = z.object({
+  record_type: z.enum(['incident','service_request']).default('incident'), business_impact: z.string().trim().max(12000).default(''),
   organization_id: z.uuid(), title: z.string().trim().min(3).max(200), description: z.string().trim().min(10).max(20000),
   category: z.enum(categories), reported_urgency: z.enum(priorities).default('normal'),
   first_occurred_at: z.iso.datetime({ offset: true }).nullable().default(null),

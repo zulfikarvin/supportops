@@ -31,6 +31,7 @@ const all=await request('support_analyst','/api/tickets');const other=all.data.f
 check(other&&(await request('customer',`/api/tickets/${other.id}`)).response.status===404,'other organization ticket denied');
 const spoofed=new FormData();spoofed.set('file',new Blob(['<script>bad</script>']),'fake.png');
 check((await request('customer',path+'/attachments','POST',spoofed)).response.status===400,'disguised upload rejected');
+check((await request('data_engineer',path+'/case-records','POST',{kind:'restoration',status:'Verified',data:{restored_at:new Date().toISOString(),restoration_method:'Corrected synthetic mapping',verification_result:'Approved fixture accepted',closure_evidence:'Acceptance check succeeded'}})).response.ok,'verified service restoration');
 check((await request('data_engineer',path,'PATCH',{status:'Resolved',resolution_summary:'Synthetic schema mapping corrected and validated.'})).response.ok,'resolution persisted');
 check((await request('customer',path+'/confirm','POST')).response.ok,'customer confirms resolution');
 const final=await request('customer',path);check(final.data.ticket.status==='Closed'&&final.data.activity.length>=5,'closed ticket history preserved');

@@ -24,7 +24,7 @@ beforeAll(async()=>{
  grant usage on schema public,auth,storage to authenticated;
  grant select on storage.objects to authenticated;`);
  const root=resolve(process.cwd(),'../../supabase');
- for(const file of ['migrations/202610270001_foundation.sql','seed.sql','migrations/202610280001_ticket_operations.sql'])await db.exec(readFileSync(resolve(root,file),'utf8'));
+ for(const file of ['migrations/202610270001_foundation.sql','seed.sql','migrations/202610280001_ticket_operations.sql','migrations/202610310001_study_case.sql'])await db.exec(readFileSync(resolve(root,file),'utf8'));
  await db.exec(`insert into auth.users values ('${customer}'),('${analyst}'),('${engineer}'),('${csm}');
  insert into public.profiles(id,display_name,role) values ('${customer}','Atlas customer','customer'),('${analyst}','Analyst','support_analyst'),('${engineer}','Engineer','data_engineer'),('${csm}','CSM','customer_success');
  insert into public.organization_memberships(organization_id,user_id) values ('${atlas}','${customer}');`);
@@ -58,9 +58,11 @@ describe('PostgreSQL migrations, RPC permissions and RLS',()=>{
  it('requires a resolution, supports reopening, and restricts closure to the customer',async()=>{
   await act(customer);const id=await create();await act(engineer);
   await expect(db.query('select public.change_ticket($1,$2::jsonb)',[id,JSON.stringify({assigned_team:'Data Engineering'})])).rejects.toThrow('permission denied');
-  await expect(db.query('select public.change_ticket($1,$2::jsonb)',[id,JSON.stringify({status:'Resolved'})])).rejects.toThrow('summary required');
+  await expect(db.query('select public.change_ticket($1,$2::jsonb)',[id,JSON.stringify({status:'Resolved'})])).rejects.toThrow('restoration required');
+  await db.query('select public.save_case_record($1,$2::jsonb)',[id,JSON.stringify({kind:'restoration',status:'Verified',data:{restored_at:new Date().toISOString(),restoration_method:'Corrected mapping',verification_result:'Synthetic file accepted',closure_evidence:'Fixture validated'}})]);
   await db.query('select public.change_ticket($1,$2::jsonb)',[id,JSON.stringify({status:'Resolved',resolution_summary:'Synthetic mapping corrected.'})]);
   await db.query('select public.change_ticket($1,$2::jsonb)',[id,JSON.stringify({status:'Investigating'})]);
+  await db.query('select public.save_case_record($1,$2::jsonb)',[id,JSON.stringify({kind:'restoration',status:'Verified',data:{restored_at:new Date().toISOString(),restoration_method:'Rechecked recovery',verification_result:'Synthetic refresh accepted again',closure_evidence:'Second fixture passed'}})]);
   await db.query('select public.change_ticket($1,$2::jsonb)',[id,JSON.stringify({status:'Resolved'})]);
   await expect(db.query('select public.confirm_ticket($1)',[id])).rejects.toThrow('Customer confirmation');
   await act(customer);await db.query('select public.confirm_ticket($1)',[id]);
@@ -84,5 +86,32 @@ describe('PostgreSQL migrations, RPC permissions and RLS',()=>{
   expect(events.rows).toHaveLength(2);expect(JSON.stringify(events.rows)).not.toContain('PRIVATE_PAYLOAD_MUST_NOT_LEAK');
   expect(new Set(events.rows.map(row=>row.idempotency_key)).size).toBe(2);
   await expect(db.query('insert into public.notification_events(ticket_id,created_by,event_type,idempotency_key,payload) select ticket_id,created_by,event_type,idempotency_key,payload from public.notification_events where ticket_id=$1 limit 1',[id])).rejects.toThrow('unique');
+ });
+ it('keeps report drafts and versions private and publishes only reviewed unchanged content',async()=>{
+  await act(customer);const id=await create();await act(analyst);
+  await db.query('select public.save_case_record($1,$2::jsonb)',[id,JSON.stringify({kind:'restoration',status:'Verified',data:{restored_at:new Date().toISOString(),restoration_method:'Workaround verified',verification_result:'Synthetic refresh recovered',closure_evidence:'Approved sample passed'}})]);
+  await db.query('select public.change_ticket($1,$2::jsonb)',[id,JSON.stringify({status:'Resolved',resolution_summary:'Verified workaround restored service.'})]);
+  const draft=(await db.query<{record:{id:string;version:number;data:Record<string,unknown>}}>('select public.save_case_record($1,$2::jsonb) record',[id,JSON.stringify({kind:'report',status:'Draft',data:{audience:'customer',content:'The synthetic refresh was restored through a verified workaround.',review_notes:''}})])).rows[0].record;
+  await act(customer);expect((await db.query('select id from public.case_records where id=$1',[draft.id])).rows).toHaveLength(0);expect((await db.query('select id from public.case_record_versions')).rows).toHaveLength(0);
+  await act(engineer);await expect(db.query('select public.save_case_record($1,$2::jsonb)',[id,JSON.stringify({id:draft.id,version:draft.version,kind:'report',status:'Approved',data:{...draft.data,review_notes:'Reviewed'}})])).rejects.toThrow('Reviewer');
+  await act(csm);const approved=(await db.query<{record:{id:string;version:number;data:Record<string,unknown>}}>('select public.save_case_record($1,$2::jsonb) record',[id,JSON.stringify({id:draft.id,version:draft.version,kind:'report',status:'Approved',data:{...draft.data,review_notes:'Checked evidence and redacted private material'}})])).rows[0].record;
+  await expect(db.query('select public.save_case_record($1,$2::jsonb)',[id,JSON.stringify({id:approved.id,version:approved.version,kind:'report',status:'Published',data:{...approved.data,content:'Changed content after the report was approved.'}})])).rejects.toThrow('unchanged');
+  await db.query('select public.save_case_record($1,$2::jsonb)',[id,JSON.stringify({id:approved.id,version:approved.version,kind:'report',status:'Published',data:approved.data})]);
+  await act(customer);expect((await db.query('select id from public.case_records where id=$1',[draft.id])).rows).toHaveLength(1);
+ });
+ it('enforces major incident ownership and rejects customer case-record writes',async()=>{
+  await act(customer);const id=await create();const data={record_type:'incident',impact:'high',urgency:'high',business_impact:'Synthetic dashboard unavailable',owner_id:analyst,major_incident:true,incident_lead:'',update_cadence_minutes:15};
+  await expect(db.query('select public.save_case_record($1,$2::jsonb)',[id,JSON.stringify({kind:'triage',status:'Recorded',data})])).rejects.toThrow('Internal');
+  await act(analyst);await expect(db.query('select public.save_case_record($1,$2::jsonb)',[id,JSON.stringify({kind:'triage',status:'Recorded',data})])).rejects.toThrow('lead');
+  await db.query('select public.save_case_record($1,$2::jsonb)',[id,JSON.stringify({kind:'triage',status:'Recorded',data:{...data,incident_lead:'Analyst'}})]);
+  expect((await db.query<{priority:string}>('select priority from public.tickets where id=$1',[id])).rows[0].priority).toBe('critical');
+ });
+ it('rejects improvement verification without follow-up evidence in PostgreSQL',async()=>{
+  await act(customer);const id=await create();await act(analyst);
+  const problem=(await db.query<{record:{id:string}}>('select public.save_case_record($1,$2::jsonb) record',[id,JSON.stringify({kind:'problem',status:'Open',data:{title:'Permanent synthetic schema fix',incident_ids:[id],owner_id:engineer,hypothesis:'Mapping drift',confirmed_cause:'',evidence:'',known_error:'',workaround:'Validated replacement feed',component:'feed',error_code:'SCHEMA'}})])).rows[0].record;
+  const data={title:'Add preflight validation',problem_id:problem.id,owner_id:engineer,acceptance_criteria:'Missing ID rejected before processing',implementation_evidence:'Preflight synthetic test passed',verification_evidence:'',baseline:'Approved sample outcome comparison',review_date:'2026-11-15'};
+  let record=(await db.query<{record:{id:string;version:number}}>('select public.save_case_record($1,$2::jsonb) record',[id,JSON.stringify({kind:'improvement',status:'Proposed',data})])).rows[0].record;
+  for(const status of ['Approved','In Progress','Implemented','Monitoring'])record=(await db.query<{record:{id:string;version:number}}>('select public.save_case_record($1,$2::jsonb) record',[id,JSON.stringify({id:record.id,version:record.version,kind:'improvement',status,data})])).rows[0].record;
+  await expect(db.query('select public.save_case_record($1,$2::jsonb)',[id,JSON.stringify({id:record.id,version:record.version,kind:'improvement',status:'Verified',data})])).rejects.toThrow('Follow-up');
  });
 });

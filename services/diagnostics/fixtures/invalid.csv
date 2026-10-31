@@ -1,0 +1,4 @@
+employee_id,hire_date,employment_status
+DEMO-001,2024-02-30,active
+DEMO-001,20-01-2024,unknown
+,2024-03-01,terminated

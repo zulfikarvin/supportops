@@ -11,12 +11,12 @@ Start `npm.cmd run dev` from the repository root, then open http://localhost:300
 7. Switch to **Data Engineer**. Open the shared ticket, add findings as a private note, then choose **Fix in Progress**.
 8. Switch to **Customer Success Manager** and publish a **Public update**. This role can communicate but cannot change investigation controls.
 9. Switch back to **Customer**. Verify the public update and status events are visible. The internal notes and evidence must be absent. Send a reply or attach a sanitized sample.
-10. Switch to Data Engineer or Support, enter a resolution summary and mark **Resolved**.
+10. Switch to Data Engineer or Support. Record restoration method, recovery verification and closure evidence in **Verify service restoration**, then enter a resolution summary and mark **Resolved**.
 11. Optional: Support may reopen a resolved ticket by choosing Investigating. Reopening increments a stored counter and keeps the previous history.
 12. Return to Customer and choose **Confirm resolution**. The ticket becomes **Closed** and the history remains readable. Closed tickets cannot be edited.
 13. Restart the server and reopen the ticket. Its history remains in `apps/web/.data/supportops.sqlite`.
 
-All displayed metrics are computed from stored tickets. Notification events are stored atomically with relevant changes but are not delivered yet. Python diagnostics and Realtime are not part of this milestone.
+All displayed metrics are computed from stored tickets. Notification events are stored but not delivered; n8n is deferred. The subsequent study-case integration adds Python diagnostics, reports, Problem/improvement records and automatic refresh; see `docs/study-case-integration.md` for the complete workflow. A disputed or reopened incident requires a fresh recovery verification before resolving again.
 
 ## Automated smoke test
 

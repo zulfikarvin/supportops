@@ -20,8 +20,10 @@ describe('persistent ticket lifecycle and authorization',()=>{
   store.close();stores.pop();store=new DemoStore(path,false);stores.push(store);
   const view=store.detail(customer,ticket.id);expect(view.ticket.status).toBe('Fix in Progress');expect(JSON.stringify(view)).not.toContain('PRIVATE');expect(view.updates).toHaveLength(1);
   expect(store.detail(analyst,ticket.id).updates).toHaveLength(2);
+  store.saveRecord(demoActor('data_engineer'),ticket.id,{kind:'restoration',status:'Verified',data:{restored_at:new Date().toISOString(),restoration_method:'Corrected synthetic mapping',verification_result:'Synthetic upload accepted',closure_evidence:'Approved fixture passed'}});
   store.change(demoActor('data_engineer'),ticket.id,changeSchema.parse({status:'Resolved',resolution_summary:'The synthetic schema mapping has been corrected.'}));
   store.change(analyst,ticket.id,changeSchema.parse({status:'Investigating'}));expect(store.detail(customer,ticket.id).ticket.reopened_count).toBe(1);
+  store.saveRecord(demoActor('data_engineer'),ticket.id,{kind:'restoration',status:'Verified',data:{restored_at:new Date().toISOString(),restoration_method:'Repeated recovery check',verification_result:'Synthetic refresh accepted again',closure_evidence:'Second approved fixture passed'}});
   store.change(analyst,ticket.id,changeSchema.parse({status:'Resolved'}));store.confirm(customer,ticket.id);
   expect(store.detail(customer,ticket.id).ticket.status).toBe('Closed');expect(store.detail(customer,ticket.id).activity.filter(event=>event.event_type==='status')).toHaveLength(6);
   expect(()=>store.addUpdate(customer,ticket.id,'After closure','public')).toThrow('closed');

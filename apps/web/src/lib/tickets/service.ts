@@ -10,7 +10,7 @@ import { TicketError, type Actor, type Attachment, type ChangeInput, type Create
 import { validateEvidence } from './files';
 
 let store: DemoStore | undefined;
-function demoStore() { return store ??= new DemoStore(resolve(process.cwd(), '.data', 'supportops.sqlite')); }
+export function demoStore() { return store ??= new DemoStore(resolve(process.cwd(), '.data', 'supportops.sqlite')); }
 export async function ticketContext() {
   if (isDemoMode()) {
     const role = parseDemoRole((await cookies()).get(DEMO_COOKIE)?.value);

@@ -4,6 +4,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { demoRoles } from '../demo';
 import { assertChange, assertRead, TicketError, type Actor, type Ticket, type Detail, type Entry, type Attachment, type CreateInput, type ChangeInput } from './model';
+import { validateRecord, canReadRecord, derivePriority, type CaseRecord, type RecordInput } from './case-model';
 
 export const demoOrganizations = [
   { id: '10000000-0000-4000-8000-000000000001', name: 'Atlas Industries' },
@@ -26,6 +27,9 @@ export class DemoStore {
       CREATE TABLE IF NOT EXISTS attachments(id TEXT PRIMARY KEY, ticket_id TEXT NOT NULL REFERENCES tickets(id), data TEXT NOT NULL, bytes BLOB NOT NULL);
       CREATE TABLE IF NOT EXISTS notifications(id TEXT PRIMARY KEY, ticket_id TEXT NOT NULL REFERENCES tickets(id), event_type TEXT NOT NULL, idempotency_key TEXT NOT NULL UNIQUE, payload TEXT NOT NULL, created_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL);`);
+    this.db.exec(`CREATE TABLE IF NOT EXISTS case_records(id TEXT PRIMARY KEY,ticket_id TEXT NOT NULL REFERENCES tickets(id),data TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS case_versions(id TEXT PRIMARY KEY,record_id TEXT NOT NULL REFERENCES case_records(id),data TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS case_access(id TEXT PRIMARY KEY,record_id TEXT NOT NULL REFERENCES case_records(id),actor_id TEXT NOT NULL,accessed_at TEXT NOT NULL);`);
     if (seed && !this.db.prepare('SELECT value FROM metadata WHERE key=?').get('seed-v1')) this.seed();
   }
   close() { this.db.close(); }
@@ -73,6 +77,10 @@ export class DemoStore {
   change(actor: Actor, id: string, input: ChangeInput) {
     return this.transaction(() => {
       const ticket = this.raw(id); assertRead(actor,ticket); assertChange(actor,ticket,input);
+      if(input.status==='Resolved'){
+        const reopen=this.detail(actor,id).activity.filter(event=>event.previous_status==='Resolved'&&event.new_status==='Investigating').at(-1)?.created_at;
+        if(!this.records(actor,id).some(record=>record.kind==='restoration'&&Number(record.data.reopen_count??0)===ticket.reopened_count&&(!reopen||record.updated_at>=reopen)))throw new TicketError('Record verified service restoration before resolving.');
+      }
       if (input.assigned_to && !demoPeople.some(person => person.id === input.assigned_to && person.role !== 'customer')) throw new TicketError('Choose an internal employee.');
       const previous = ticket.status; const oldTeam = ticket.assigned_team; const oldAssignee = ticket.assigned_to; const oldPriority = ticket.priority;
       const { explanation, ...changes } = input; Object.assign(ticket, changes);
@@ -127,6 +135,48 @@ export class DemoStore {
     if(!file)throw new TicketError('Attachment not found.',404);
     const row=this.db.prepare('SELECT bytes FROM attachments WHERE id=?').get(fileId) as {bytes:Uint8Array};
     return {file,bytes:row.bytes};
+  }
+  records(actor:Actor,ticketId?:string):CaseRecord[]{
+    const rows=(ticketId?this.db.prepare('SELECT data FROM case_records WHERE ticket_id=?').all(ticketId):this.db.prepare('SELECT data FROM case_records').all()) as {data:string}[];
+    if(ticketId)assertRead(actor,this.raw(ticketId));
+    return rows.map(row=>JSON.parse(row.data) as CaseRecord).filter(record=>canReadRecord(actor,record,this.raw(record.ticket_id))).sort((a,b)=>b.updated_at.localeCompare(a.updated_at));
+  }
+  versions(actor:Actor,ticketId:string):CaseRecord[]{
+    if(actor.role==='customer')throw new TicketError('Internal history is private.',403);assertRead(actor,this.raw(ticketId));
+    const rows=this.db.prepare('SELECT v.data FROM case_versions v JOIN case_records r ON r.id=v.record_id WHERE r.ticket_id=? ORDER BY v.rowid DESC').all(ticketId) as {data:string}[];
+    return rows.map(row=>JSON.parse(row.data));
+  }
+  reportAccess(actor:Actor,recordId:string){const record=this.records(actor).find(record=>record.id===recordId&&record.kind==='report');if(!record)throw new TicketError('Report not found.',404);this.db.prepare('INSERT INTO case_access VALUES (?,?,?,?)').run(randomUUID(),recordId,actor.id,new Date().toISOString());}
+  saveRecord(actor:Actor,id:string,raw:RecordInput,diagnostic=false){
+    return this.transaction(()=>{
+      const ticket=this.raw(id);assertRead(actor,ticket);const all=this.records(actor);const previous=all.find(record=>record.id===raw.id);
+      const input=diagnostic?raw:validateRecord(actor,raw,ticket,previous,all,demoPeople.filter(person=>person.role!=='customer'));
+      if(diagnostic&&(actor.role==='customer'||actor.role==='customer_success'))throw new TicketError('Technical access required.',403);
+      if(input.kind==='problem'&&(input.data.incident_ids as string[]).some(ticketId=>!this.list(actor).some(item=>item.id===ticketId&&item.record_type!=='service_request')))throw new TicketError('A linked incident is unavailable.');
+      const now=new Date().toISOString();
+      if(input.kind==='restoration')input.data.reopen_count=ticket.reopened_count;
+      if(input.kind==='improvement'){
+        delete input.data.implemented_at;delete input.data.verified_at;
+        if(previous?.data.implemented_at)input.data.implemented_at=previous.data.implemented_at;
+        if(input.status==='Implemented'&&previous?.status!=='Implemented')input.data.implemented_at=now;
+        if(input.status==='Verified')input.data.verified_at=now;
+      }
+      const record:CaseRecord={id:previous?.id??randomUUID(),ticket_id:id,kind:input.kind,status:input.status,version:(previous?.version??0)+1,data:input.data,created_by:previous?.created_by??actor.id,author_name:previous?.author_name??actor.name,reviewed_by:input.status==='Approved'?actor.id:input.status==='Draft'?null:previous?.reviewed_by??null,created_at:previous?.created_at??now,updated_at:now};
+      this.db.prepare('INSERT INTO case_records VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data').run(record.id,id,JSON.stringify(record));
+      this.db.prepare('INSERT INTO case_versions VALUES (?,?,?)').run(randomUUID(),record.id,JSON.stringify(record));
+      if(input.kind==='triage'){
+        ticket.priority=derivePriority(input.data.impact as 'low'|'medium'|'high',input.data.urgency as 'low'|'medium'|'high');ticket.record_type=input.data.record_type as 'incident'|'service_request';ticket.business_impact=String(input.data.business_impact);
+        this.entry(actor,ticket,'triage',`Classified as ${ticket.record_type.replace('_',' ')}. Priority: ${ticket.priority}.`);
+      }
+      const published=input.kind==='report'&&input.status==='Published';
+      const eventSummary=input.kind==='diagnostic'?`Diagnostic summary: ${(input.data.summary as {failed_checks:number}).failed_checks} failed checks; source ${input.data.source_id}.`:`${input.kind} ${input.status.toLowerCase()} (version ${record.version}).`;
+      this.entry(actor,ticket,`case.${input.kind}`,eventSummary,published?'public':'internal');ticket.updated_at=now;this.save(ticket);return record;
+    });
+  }
+  dispute(actor:Actor,id:string,reason:string){
+    return this.transaction(()=>{const ticket=this.raw(id);assertRead(actor,ticket);if(actor.role!=='customer'||ticket.status!=='Resolved')throw new TicketError('Only a customer can dispute a resolved ticket.',403);
+      ticket.status='Investigating';ticket.reopened_count++;ticket.resolved_at=null;ticket.confirmed_at=null;ticket.updated_at=new Date().toISOString();this.entry(actor,ticket,'status',`Customer disputes recovery: ${reason}`,'public','Resolved');this.save(ticket);
+    });
   }
   private seed() {
     this.transaction(() => {

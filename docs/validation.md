@@ -30,4 +30,16 @@ The localhost HTTP smoke test passed through customer creation, analyst investig
 
 Final checks passed: 16 tests across 4 files, ESLint with zero reported issues, TypeScript, and the Next.js production build. The build's broad-filesystem-tracing warning was corrected by scoping the SQLite path to `.data`. Node 22 still reports the expected experimental warning for its built-in SQLite API. Dependency installation audit reported zero known vulnerabilities.
 
+## ITIL study-case integration — 2026-10-31
+
+Compared the supplied study case with the repository, updated the roadmap and implemented triage/routing, impact × urgency priority, major-incident ownership/cadence, investigation checklists, restoration/disputes, Python diagnostics, reviewed reports/PDFs, Problems/known errors, controlled improvements, recurrence and analytics. n8n is deferred. The source DOCX remains unchanged.
+
+The JavaScript suite now contains 25 tests across five files; the Python suite contains nine tests. They cover SQLite persistence, PostgreSQL migration/RPC/RLS enforcement, report privacy/publication, strict evidence-based recurrence, restoration independent of Problem completion, sequential improvement gates, deterministic CSV checks and service authentication. PostgreSQL tests use PGlite and stub Supabase service surfaces.
+
+`scripts/smoke-study-case.mjs` passed against both running local services: real Python missing/valid fixture outcomes, no raw employee values, rejected unverified recovery, open Problem after incident restoration, separate report drafts, customer draft/internal PDF denial, approved PDF download, private-history denial, closed incident preservation, evidence-gated improvement verification, repeated confirmed incidents and planned SSO request routing. The root `dev:full` startup command was also exercised with existing local listeners.
+
+Build, TypeScript and lint checks passed during integration. Node emits the expected experimental SQLite warning. Pytest emits a deprecation warning from Starlette's httpx compatibility layer. The production dependency audit found zero vulnerabilities; the full audit reports 16 moderate advisories in development lint tooling from a minimatch transitive dependency. No forced downgrade or incompatible override was applied.
+
+Browser automation was attempted but could not initialize because of the Windows sandbox setup refresh error. Visual interaction/accessibility is not verified. Live Supabase Auth, Storage, signed URLs and WebSocket delivery remain unverified; no remote migration or deployment was performed. The supplied document's diagram/layout design is not being claimed as visually reproduced.
+
 Browser automation could not initialize because the runtime reported a sandbox setup refresh error. Visual interaction QA is therefore not verified. Docker also remains unavailable, so live Supabase Auth, Storage, signed URL behavior and the local pgTAP suite are not verified. No remote migrations were applied automatically.

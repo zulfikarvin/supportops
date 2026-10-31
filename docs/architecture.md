@@ -26,4 +26,8 @@ Session plumbing follows the [Supabase SSR client guidance](https://supabase.com
 
 ## Delivery status
 
-Phase 2 core ticket features are implemented. SQLite persistence, API role boundaries, embedded PostgreSQL RPC/RLS behavior and the localhost lifecycle are tested. Live Supabase Auth, Storage and signed URL acceptance still require a configured instance. Realtime, Python diagnostics, extended collaboration, full analytics and n8n delivery remain outstanding. Customer confirmation and sanitized outbox creation were implemented early to support a complete ticket lifecycle.
+The 31 October 2026 study-case integration adds typed case records for triage, investigation, restoration, diagnostics, reviewed reports, Problems and improvements. Version snapshots and report-download audit logs are internal-only. Customers can read only published customer reports belonging to their organization, including the PDF route. Report publication is a distinct approval gate; Problems and preventive actions do not block incident recovery or closure.
+
+Python FastAPI/Pandas diagnostics run in a separate authenticated service. Next.js authorizes technical roles and evidence before invoking it; sample values are not persisted in diagnostic summaries. Demo views poll authorized ticket changes every five seconds. Supabase subscribes only to RLS-protected public ticket rows, with polling fallback; private case/report/diagnostic tables stay out of the publication. n8n delivery is explicitly deferred.
+
+Core tickets and the study-case features above are implemented and covered by local tests. Live Supabase Auth, Storage, signed URLs and WebSocket delivery still require a configured instance. Visual interaction/accessibility review and hosted deployment acceptance remain outstanding. No n8n service is required. See `docs/study-case-integration.md` for scope, policy differences and the updated demonstration.

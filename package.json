@@ -6,6 +6,7 @@
     "apps/web"
   ],
   "scripts": {
+    "dev:full": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/dev-local.ps1",
     "dev": "npm run dev -w apps/web",
     "build": "npm run build -w apps/web",
     "typecheck": "npm run typecheck -w apps/web",

@@ -3,7 +3,9 @@ import { notFound } from 'next/navigation';
 import { z } from 'zod';
 import { LockKeyhole, Paperclip, MessageSquare } from 'lucide-react';
 import { pageContext, pageError } from '@/lib/tickets/page-context';
-import { directory, ticketDetail } from '@/lib/tickets/service';
+import { directory, ticketDetail, listTickets } from '@/lib/tickets/service';
+import { records as loadRecords } from '@/lib/tickets/case-service';
+import { CaseWorkspace } from '@/components/case-workspace';
 import { StatusBadge, PriorityBadge, dateTime } from '@/components/ticket-ui';
 import { TicketActions } from '@/components/ticket-actions';
 import type { Entry } from '@/lib/tickets/model';
@@ -11,8 +13,9 @@ function Timeline({items}:{items:Entry[]}){return items.length?<ol className="sp
 export default async function DetailPage({params,searchParams}:{params:Promise<{id:string}>;searchParams:Promise<{saved?:string}>}){
   const {id}=await params;if(!z.uuid().safeParse(id).success)notFound();const ctx=await pageContext();
   const detail=await ticketDetail(ctx,id).catch(pageError);const {people}=await directory(ctx);const {ticket}=detail;const {saved}=await searchParams;
+  const caseRecords=await loadRecords(ctx,id);const allRecords=ctx.actor.role==='customer'?caseRecords:await loadRecords(ctx);const allTickets=ctx.actor.role==='customer'?[ticket]:await listTickets(ctx);
   const timeline=[...detail.activity,...detail.updates].sort((a,b)=>a.created_at.localeCompare(b.created_at));
-  return <><Link className="text-sm text-teal-700" href="/workspace/tickets">← Back to tickets</Link><div className="mt-6"><p className="eyebrow">SUP-{ticket.number} · {ticket.organization_name}</p><h1 className="page-title">{ticket.title}</h1><div className="mt-4 flex flex-wrap items-center gap-4"><StatusBadge value={ticket.status}/><PriorityBadge value={ticket.priority}/><span className="text-sm text-slate-500">{ticket.category}</span></div></div>
+  return <><Link className="text-sm text-teal-700" href="/workspace/tickets">← Back to tickets</Link><div className="mt-6"><p className="eyebrow">SUP-{ticket.number} · {ticket.organization_name}</p><h1 className="page-title">{ticket.title}</h1><div className="mt-4 flex flex-wrap items-center gap-4"><StatusBadge value={(ticket.record_type ?? "incident").replace("_", " ")}/><StatusBadge value={ticket.status}/><PriorityBadge value={ticket.priority}/><span className="text-sm text-slate-500">{ticket.category}</span></div></div>
     {saved==='created'&&<p role="status" className="mt-6 rounded-lg bg-emerald-50 p-4 text-sm text-emerald-800">Your issue has been reported. Follow progress and reply here.</p>}
     <div className="mt-8 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]"><div className="min-w-0 space-y-6">
       <section className="panel"><h2 className="font-semibold">Original report</h2><p className="mt-4 whitespace-pre-wrap break-words text-sm leading-7 text-slate-600">{ticket.description}</p><dl className="mt-6 grid gap-5 border-t border-slate-100 pt-5 text-sm sm:grid-cols-2">{[['Responsible team',ticket.assigned_team??'Unassigned'],['Assigned employee',people.find(p=>p.id===ticket.assigned_to)?.display_name??(ticket.assigned_to?'Support team member':'Unassigned')],['Reported urgency',ticket.reported_urgency],['Users affected',ticket.users_affected??'Not specified'],['First occurred',ticket.first_occurred_at?dateTime(ticket.first_occurred_at):'Not specified'],['Created',dateTime(ticket.created_at)]].map(([label,value])=><div key={label}><dt className="text-xs text-slate-500">{label}</dt><dd className="mt-1.5 capitalize">{value}</dd></div>)}</dl>{ticket.error_message&&<div className="mt-5"><h3 className="text-sm font-medium">Reported error</h3><pre className="mt-2 overflow-x-auto rounded-lg bg-slate-50 p-4 text-xs whitespace-pre-wrap">{ticket.error_message}</pre></div>}</section>
@@ -20,5 +23,6 @@ export default async function DetailPage({params,searchParams}:{params:Promise<{
       <section className="panel"><h2 className="mb-5 flex items-center gap-2 font-semibold"><MessageSquare size={18} className="text-teal-700"/>Customer-visible timeline</h2><Timeline items={timeline.filter(item=>item.visibility==='public')}/></section>
       {ctx.actor.role!=='customer'&&<section className="panel border-amber-200"><h2 className="mb-2 flex items-center gap-2 font-semibold"><LockKeyhole size={18} className="text-amber-700"/>Internal investigation notes</h2><p className="mb-5 text-xs text-slate-500">Private to internal teams. Never included in customer responses.</p><Timeline items={timeline.filter(item=>item.visibility==='internal')}/></section>}
       <section className="panel"><h2 className="mb-4 flex items-center gap-2 font-semibold"><Paperclip size={18}/>Evidence & attachments</h2>{detail.attachments.length?<ul className="divide-y divide-slate-100">{detail.attachments.map(file=><li key={file.id} className="py-3"><a href={`/api/tickets/${id}/attachments/${file.id}`} className="text-sm font-medium text-teal-700">{file.filename} ↓</a><p className="mt-1 text-xs text-slate-500">{Math.ceil(file.size_bytes/1024)} KB · {file.visibility==='internal'?'Internal only':'Customer-visible'}</p></li>)}</ul>:<p className="text-sm text-slate-500">No supporting evidence attached yet.</p>}</section>
+      <CaseWorkspace actor={ctx.actor} ticket={ticket} records={caseRecords} allRecords={allRecords} people={people} tickets={allTickets} attachments={detail.attachments}/>
     </div><TicketActions ticket={ticket} actor={ctx.actor} people={people}/></div></>;
 }
