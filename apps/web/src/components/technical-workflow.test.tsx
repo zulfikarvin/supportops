@@ -15,6 +15,17 @@ function fixture() {
   finally { store.close(); }
 }
 describe('focused technical workflow rendering', () => {
+  it('renders exactly the same resolution section for Product & Tech and Technical Support', () => {
+    const ticket = fixture();
+    const render = (role: 'support_analyst' | 'product_tech') => renderToStaticMarkup(<AnalystWorkflow actor={demoActor(role)} ticket={ticket} records={[]} people={demoPeople}/>);
+    const support = render('support_analyst');
+    const product = render('product_tech');
+    const resolution = (html: string) => html.slice(html.lastIndexOf('<section class="panel analyst-step">'));
+    expect(resolution(product)).toEqual(resolution(support));
+    expect(product).toContain('3. Resolve ticket');
+    expect(product).toContain('2. Post an update');
+    expect(product).not.toContain('1. Assess &amp; assign');
+  });
   it.each(['support_analyst', 'data_engineer', 'product_tech'] as const)('gives %s one resolution form with two meaningful inputs and no legacy save path', role => {
     const ticket = fixture();
     const actor = demoActor(role);
