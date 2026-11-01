@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { cookies } from 'next/headers';
-import { DEMO_COOKIE, isDemoMode } from '@/lib/demo';
+import { DEMO_COOKIE, isDemoMode, isLocalDemoMode, isPortfolioMode } from '@/lib/demo';
 export async function login(_state: { error: string }, form: FormData) {
   if (isDemoMode()) return { error: 'Choose a demo role to continue.' };
   const parsed = z.object({ email: z.email(), password: z.string().min(1).max(256) }).safeParse(Object.fromEntries(form));
@@ -16,12 +16,12 @@ export async function login(_state: { error: string }, form: FormData) {
   redirect('/workspace');
 }
 export async function logout() {
-  if (isDemoMode()) {
+  if (isLocalDemoMode()) {
     (await cookies()).delete(DEMO_COOKIE);
     redirect('/login');
   }
   const client = await createClient();
-  const { error } = await client.auth.signOut();
+  const { error } = await client.auth.signOut(isPortfolioMode()?{scope:'local'}:undefined);
   if (error) throw new Error('Sign out failed. Please try again.');
   redirect('/login');
 }

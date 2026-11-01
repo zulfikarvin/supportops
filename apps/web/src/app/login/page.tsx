@@ -22,7 +22,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
       <h2 className="mt-3 text-2xl font-semibold">{demo ? 'Choose your role' : 'Sign in to SupportOps'}</h2>
       <p className="mt-3 text-xs leading-6 text-slate-500">{demo ? 'Step into a customer or team perspective. No account or password needed.' : 'Sign in with your administrator-provisioned account.'}</p>
       {demo ? <>
-        {error && <p role="alert" className="mt-5 text-sm text-red-700">Choose a valid role to continue.</p>}
+        {error && <p role="alert" className="mt-5 text-sm text-red-700">{error==='portfolio'?'The demo could not start. Please try again.':'Choose a valid role to continue.'}</p>}
         <div className="mt-7 grid gap-3">{demoRoles.map((item, index) => {
           const Icon = icons[index];
           return <form key={item.role} action="/api/demo-session" method="post">

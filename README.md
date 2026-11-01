@@ -10,13 +10,15 @@ New features: incident/service-request routing, business impact and urgency-base
 
 ### Password-free demo access
 
+**For the hosted portfolio on Vercel:** set `SUPPORTOPS_AUTH_MODE=portfolio` and keep the existing hosted Supabase URL, publishable key, and server-only secret key. The five-role picker signs reviewers into fixed synthetic personas automatically, with no email/password entry. Tickets and files persist in Supabase. Existing users are not repurposed, and no new migration is needed. See [hosted portfolio setup](docs/hosted-portfolio.md).
+
 Internal homepages provide role-specific workspaces for Customer Success, Technical Support, Data Engineering, and Product & Tech. See [dashboard metric definitions and data limits](docs/internal-dashboards.md). The customer homepage remains focused on actionable requests and public progress updates.
 
 Analyst ticket handling uses three focused actions: assess & assign, post an update, and resolve. Duplicate ownership, priority, explanation, and restoration inputs have been consolidated; optional tools remain collapsed. See [analyst workflow and Supabase setup](docs/analyst-workflow.md). Existing Supabase projects must apply `supabase/migrations/202611010002_simplified_ticket_workflow.sql` for the combined transactional actions; local demo mode works immediately.
 
 The app defaults to demo mode. Open `/login`, choose one of five roles, and enter without Supabase credentials. Switch roles from the workspace sidebar or use Exit demo. The selected persona is remembered in an HttpOnly cookie for eight hours. Tickets, messages, activity, notification events and evidence persist in a local SQLite database at `apps/web/.data/supportops.sqlite`. All roles share this synthetic dataset, so switching roles continues the same investigation. Demo customers belong to Atlas Industries; internal roles can also see Northstar and Meridian tickets.
 
-Demo mode does not log into Supabase or grant database permissions. To use authenticated mode, set `SUPPORTOPS_AUTH_MODE=supabase` in `apps/web/.env.local`, configure the Supabase values below, and restart the app. The demo endpoint is disabled in authenticated mode. Account provisioning applies only to Supabase mode. Local SQLite requires Node 22.17+ and a writable persistent disk; use Supabase mode on Vercel.
+Local `demo` mode does not log into Supabase or grant database permissions. To use provisioned email/password authentication, set `SUPPORTOPS_AUTH_MODE=supabase` in `apps/web/.env.local`, configure the Supabase values below, and restart the app. The role-selection endpoint is disabled in that mode. Hosted `portfolio` mode provisions only its five fixed synthetic personas and uses real Supabase sessions behind the role picker. Local SQLite requires Node 22.17+ and a writable persistent disk; use `portfolio` or `supabase` mode on Vercel.
 
 The existing customer/internal dashboards, filtered ticket tables, intake, assignments, public/private messages, attachments and persistent history remain. The same UI uses either a synthetic SQLite demo or Supabase Auth/RLS and transactional RPCs. Metrics come from stored records. Four fictional incidents seed a new demo database; the study-case smoke test creates additional evidence-linked demonstration records.
 
@@ -111,7 +113,7 @@ Manual Phase 1 acceptance: sign in as each provisioned role, verify the displaye
 
 ## Vercel deployment
 
-Import the GitHub repository into Vercel, choose Next.js, and set Root Directory to `apps/web`, with workspace files outside the root included. Set `SUPPORTOPS_AUTH_MODE=supabase`, both `NEXT_PUBLIC_SUPABASE_*` values, `SUPABASE_SECRET_KEY` for attachments, and diagnostic URL/token for Python checks. Apply all three migrations before deployment. Set the hosted Supabase Site URL to the Vercel URL. Keep previews on a development Supabase project. SQLite is not durable on Vercel. No remote migrations or deployment were performed automatically.
+Import the GitHub repository into Vercel, choose Next.js, and set Root Directory to `apps/web`, with workspace files outside the root included. For the password-free portfolio set `SUPPORTOPS_AUTH_MODE=portfolio`; use `supabase` only when provisioned email/password login is wanted. Configure both `NEXT_PUBLIC_SUPABASE_*` values, `SUPABASE_SECRET_KEY`, and diagnostic URL/token for Python checks. Apply all five application migrations before deployment. Set the hosted Supabase Site URL to the Vercel URL. Keep previews on a development Supabase project. SQLite is not durable on Vercel. See [hosted portfolio setup](docs/hosted-portfolio.md).
 
 ## Integrated delivery roadmap
 

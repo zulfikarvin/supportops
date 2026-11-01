@@ -27,4 +27,11 @@ describe('dashboard authorization boundary', () => {
     expect(response.status).toBe(404);
     expect(response.headers.get('set-cookie')).toBeNull();
   });
+  it('uses real Supabase authorization instead of the local role cookie in portfolio mode', async () => {
+    vi.stubEnv('SUPPORTOPS_AUTH_MODE', 'portfolio');
+    const context = await ticketContext();
+    expect(context.client).not.toBeNull();
+    expect(context.actor.id).toBe('real-user');
+    expect(cookieReader).not.toHaveBeenCalled();
+  });
 });

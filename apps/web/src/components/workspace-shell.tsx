@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { LifeBuoy, ChevronDown, ArrowLeftRight, LogOut, UsersRound } from 'lucide-react';
 import { logout } from '@/app/login/actions';
-import { isDemoMode } from '@/lib/demo';
+import { isDemoMode, isLocalDemoMode } from '@/lib/demo';
 import type { Actor } from '@/lib/tickets/model';
 import { roleNames } from '@/lib/roles';
 import { LiveRefresh } from './live-refresh';
@@ -25,6 +25,6 @@ export function WorkspaceShell({actor,children}:{actor:Actor;children:React.Reac
         </details>
       </div>
     </header>
-    <main className="workspace-content"><LiveRefresh demo={demo}/>{children}</main>
+    <main className="workspace-content"><LiveRefresh demo={isLocalDemoMode()}/>{children}</main>
   </div>;
 }

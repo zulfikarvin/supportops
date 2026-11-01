@@ -1,11 +1,11 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { isConfigured, supabaseEnv } from '@/lib/env';
-import { isDemoMode } from '@/lib/demo';
+import { isLocalDemoMode } from '@/lib/demo';
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
   response.headers.set('Cache-Control', 'private, no-store');
-  if (isDemoMode() || !isConfigured()) return response;
+  if (isLocalDemoMode() || !isConfigured()) return response;
   const { url, key } = supabaseEnv();
   const client = createServerClient(url, key, { cookies: {
     getAll: () => request.cookies.getAll(),

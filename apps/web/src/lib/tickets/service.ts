@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 import { resolve } from 'node:path';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { requireUser } from '../auth';
-import { DEMO_COOKIE, isDemoMode, parseDemoRole } from '../demo';
+import { DEMO_COOKIE, isLocalDemoMode, isPortfolioMode, portfolioPersonas, parseDemoRole } from '../demo';
 import { roles } from '../roles';
 import { DemoStore, demoActor, demoOrganizations, demoPeople } from './demo-store';
 import { TicketError, type Actor, type Attachment, type ChangeInput, type CreateInput, type Detail, type Entry, type Ticket } from './model';
@@ -12,7 +12,7 @@ import { validateEvidence } from './files';
 let store: DemoStore | undefined;
 export function demoStore() { return store ??= new DemoStore(resolve(process.cwd(), '.data', 'supportops.sqlite')); }
 export async function ticketContext() {
-  if (isDemoMode()) {
+  if (isLocalDemoMode()) {
     const role = parseDemoRole((await cookies()).get(DEMO_COOKIE)?.value);
     if (!role) throw new TicketError('Choose a demo role to continue.',401);
     return { actor: demoActor(role), client: null };
@@ -27,7 +27,9 @@ export type Context=Awaited<ReturnType<typeof ticketContext>>;
 function fail(error: {code?:string;message:string}|null) { if(error) throw new TicketError(error.code==='42501'?'Permission denied.':error.code==='P0002'?'Ticket not found.':'The operation could not be saved. Check your input and reload the ticket.',error.code==='42501'?403:error.code==='P0002'?404:400); }
 export async function directory(ctx:Context) {
   if(!ctx.client)return {organizations:demoOrganizations.filter(org=>ctx.actor.role!=='customer'||ctx.actor.organizationIds.includes(org.id)),people:ctx.actor.role==='customer'?[]:demoPeople.filter(person=>person.role!=='customer')};
-  const [orgs,people]=await Promise.all([ctx.client.from('organizations').select('id,name'),ctx.actor.role==='customer'?Promise.resolve({data:[],error:null}):ctx.client.from('profiles').select('id,display_name,role').neq('role','customer')]);
+  let peopleQuery=ctx.client.from('profiles').select('id,display_name,role').neq('role','customer');
+  if(isPortfolioMode())peopleQuery=peopleQuery.in('id',portfolioPersonas.map(person=>person.id));
+  const [orgs,people]=await Promise.all([ctx.client.from('organizations').select('id,name'),ctx.actor.role==='customer'?Promise.resolve({data:[],error:null}):peopleQuery]);
   fail(orgs.error);fail(people.error);return {organizations:orgs.data??[],people:people.data??[]};
 }
 function ticketRow(row: Record<string,unknown>):Ticket {
