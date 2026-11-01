@@ -6,8 +6,12 @@ import { TicketError } from './model';
 export async function records(ctx:Context,ticketId?:string):Promise<CaseRecord[]>{
  if(!ctx.client)return demoStore().records(ctx.actor,ticketId);
  if(ticketId)await ticketDetail(ctx,ticketId);
- let query=ctx.client.from('case_records').select('*').order('updated_at',{ascending:false});if(ticketId)query=query.eq('ticket_id',ticketId);
- const {data,error}=await query;if(error)throw new TicketError('Unable to load case records. Apply the study-case migration.',503);return data as CaseRecord[];
+ const result:CaseRecord[]=[];
+ for(let start=0;;start+=500){
+  let query=ctx.client.from('case_records').select('*').order('updated_at',{ascending:false}).order('id').range(start,start+499);if(ticketId)query=query.eq('ticket_id',ticketId);
+  const {data,error}=await query;if(error)throw new TicketError('Unable to load case records. Apply the study-case migration.',503);
+  result.push(...(data??[]) as CaseRecord[]);if((data?.length??0)<500)return result;
+ }
 }
 export async function analyticsWindow(days:number){return new Date(Date.now()-days*86400000).toISOString();}
 export async function versionHistory(ctx:Context,ticketId:string):Promise<CaseRecord[]>{

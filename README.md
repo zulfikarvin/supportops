@@ -10,6 +10,10 @@ New features: incident/service-request routing, business impact and urgency-base
 
 ### Password-free demo access
 
+Internal homepages provide role-specific workspaces for Customer Success, Technical Support, Data Engineering, and Product & Tech. See [dashboard metric definitions and data limits](docs/internal-dashboards.md). The customer homepage remains focused on actionable requests and public progress updates.
+
+Analyst ticket handling uses three focused actions: assess & assign, post an update, and resolve. Duplicate ownership, priority, explanation, and restoration inputs have been consolidated; optional tools remain collapsed. See [analyst workflow and Supabase setup](docs/analyst-workflow.md). Existing Supabase projects must apply `supabase/migrations/202611010002_simplified_ticket_workflow.sql` for the combined transactional actions; local demo mode works immediately.
+
 The app defaults to demo mode. Open `/login`, choose one of five roles, and enter without Supabase credentials. Switch roles from the workspace sidebar or use Exit demo. The selected persona is remembered in an HttpOnly cookie for eight hours. Tickets, messages, activity, notification events and evidence persist in a local SQLite database at `apps/web/.data/supportops.sqlite`. All roles share this synthetic dataset, so switching roles continues the same investigation. Demo customers belong to Atlas Industries; internal roles can also see Northstar and Meridian tickets.
 
 Demo mode does not log into Supabase or grant database permissions. To use authenticated mode, set `SUPPORTOPS_AUTH_MODE=supabase` in `apps/web/.env.local`, configure the Supabase values below, and restart the app. The demo endpoint is disabled in authenticated mode. Account provisioning applies only to Supabase mode. Local SQLite requires Node 22.17+ and a writable persistent disk; use Supabase mode on Vercel.
@@ -19,6 +23,8 @@ The existing customer/internal dashboards, filtered ticket tables, intake, assig
 Demo views check for authorized changes every five seconds and preserve focused form edits. Supabase mode also subscribes to authorized ticket-row changes, with polling as fallback; private case records are not published to Realtime. Live WebSocket delivery still needs Supabase service acceptance. Ticket events retain the sanitized outbox, but no notifications are sent.
 
 ## Local setup (Windows PowerShell)
+
+Proof attachments accept PNG, JPEG, PDF, Word (`.doc`/`.docx`), UTF-8 text/logs, and CSV, up to 5 MB each. Staff ticket views automatically display image and PDF previews below the original report, with downloads retained for all formats. Previews use the authorized attachment endpoint and private, noncached responses; PDFs stream through the app in Supabase mode. Document uploads work in local demo mode without setup. Existing Supabase projects must apply `supabase/migrations/202611010001_document_evidence.sql` (SQL Editor or your migration workflow) to extend the attachment and private Storage bucket MIME allowlists.
 
 For the password-free demo, use Node 22.17+ and npm, then run `npm.cmd ci` and `npm.cmd run dev`. No Docker or environment file is needed. SQLite uses Node's experimental built-in API.
 
