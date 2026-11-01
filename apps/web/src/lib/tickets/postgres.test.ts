@@ -24,7 +24,7 @@ beforeAll(async()=>{
  grant usage on schema public,auth,storage to authenticated;
  grant select on storage.objects to authenticated;`);
  const root=resolve(process.cwd(),'../../supabase');
- for(const file of ['migrations/202610270001_foundation.sql','seed.sql','migrations/202610280001_ticket_operations.sql','migrations/202610310001_study_case.sql'])await db.exec(readFileSync(resolve(root,file),'utf8'));
+ for(const file of ['migrations/202610270001_foundation.sql','seed.sql','migrations/202610280001_ticket_operations.sql','migrations/202610310001_study_case.sql','migrations/202611010001_document_evidence.sql','migrations/202611010002_simplified_ticket_workflow.sql'])await db.exec(readFileSync(resolve(root,file),'utf8'));
  await db.exec(`insert into auth.users values ('${customer}'),('${analyst}'),('${engineer}'),('${csm}');
  insert into public.profiles(id,display_name,role) values ('${customer}','Atlas customer','customer'),('${analyst}','Analyst','support_analyst'),('${engineer}','Engineer','data_engineer'),('${csm}','CSM','customer_success');
  insert into public.organization_memberships(organization_id,user_id) values ('${atlas}','${customer}');`);
@@ -79,6 +79,31 @@ describe('PostgreSQL migrations, RPC permissions and RLS',()=>{
   expect((await db.query('select id from storage.objects where name=$1',[file.object_path])).rows).toHaveLength(1);
   await act(customer);expect((await db.query('select id from public.ticket_attachments where id=$1',[file.id])).rows).toHaveLength(0);
   expect((await db.query('select id from storage.objects where name=$1',[file.object_path])).rows).toHaveLength(0);
+ });
+ it('allows PDF and Word attachment reservations and extends the private bucket MIME list',async()=>{
+  await act(customer);const id=await create();
+  for(const content_type of ['application/pdf','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document']){
+   await expect(db.query('select public.reserve_ticket_attachment($1,$2::jsonb)',[id,JSON.stringify({filename:'proof',content_type,size_bytes:100,visibility:'public'})])).resolves.toBeDefined();
+  }
+  await db.exec('reset role');
+  const bucket=(await db.query<{allowed_mime_types:string[];public:boolean}>('select allowed_mime_types,public from storage.buckets where id=$1',['ticket-evidence'])).rows[0];
+  expect(bucket.public).toBe(false);expect(bucket.allowed_mime_types).toContain('application/pdf');expect(bucket.allowed_mime_types).toContain('application/msword');expect(bucket.allowed_mime_types).toContain('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+ });
+ it('atomically saves focused assessment and resolution actions using existing permissions',async()=>{
+  await act(customer);const id=await create();await act(analyst);
+  const timestamp=async()=>(await db.query<{updated_at:Date}>('select updated_at from public.tickets where id=$1',[id])).rows[0].updated_at;
+  const triage={kind:'triage',status:'Recorded',data:{record_type:'incident',impact:'medium',urgency:'high',business_impact:'Reporting delayed',owner_id:engineer,major_incident:false,incident_lead:'',update_cadence_minutes:30}};
+  const apply=(at:Date,rec:unknown[],change:unknown,update:unknown=null)=>db.query('select public.apply_ticket_workflow($1,$2,$3::jsonb,$4::jsonb,$5::jsonb)',[id,at,JSON.stringify(rec),change===null?null:JSON.stringify(change),update===null?null:JSON.stringify(update)]);
+  const original=await timestamp();
+  await expect(apply(original,[triage],{assigned_to:customer})).rejects.toThrow('internal employee');
+  expect((await db.query('select id from public.case_records where ticket_id=$1',[id])).rows).toHaveLength(0);
+  await apply(await timestamp(),[triage],{status:'Triaged',assigned_to:engineer,assigned_team:'Data Engineering'});
+  expect((await db.query<{status:string}>('select status from public.tickets where id=$1',[id])).rows[0].status).toBe('Triaged');
+  await expect(apply(original,[],{status:'Investigating'})).rejects.toThrow('Ticket changed');
+  const restoration={kind:'restoration',status:'Verified',data:{restored_at:new Date().toISOString(),restoration_method:'Corrected mapping',verification_result:'Approved sample passed',closure_evidence:'Approved sample passed'}};
+  await apply(await timestamp(),[restoration],{status:'Resolved',resolution_summary:'Corrected mapping'});
+  expect((await db.query<{status:string}>('select status from public.tickets where id=$1',[id])).rows[0].status).toBe('Resolved');
+  await act(customer);await expect(apply(await timestamp(),[],null,{body:'Attempted workflow access',visibility:'public'})).rejects.toThrow('Technical access');
  });
  it('records sanitized unique notification events atomically',async()=>{
   await act(customer);const id=await create();await act(analyst);await db.query("select public.add_ticket_update($1,'PRIVATE_PAYLOAD_MUST_NOT_LEAK','public')",[id]);

@@ -35,7 +35,19 @@ function ticketRow(row: Record<string,unknown>):Ticket {
 }
 export async function listTickets(ctx:Context) {
   if(!ctx.client)return demoStore().list(ctx.actor);
-  const {data,error}=await ctx.client.from('tickets').select('*,organizations(name)').order('updated_at',{ascending:false});fail(error);return (data??[]).map(ticketRow);
+  const tickets:Ticket[]=[];
+  for(let start=0;;start+=500){
+    const {data,error}=await ctx.client.from('tickets').select('*,organizations(name)').order('updated_at',{ascending:false}).order('id').range(start,start+499);
+    fail(error);tickets.push(...(data??[]).map(ticketRow));
+    if((data?.length??0)<500)return tickets;
+  }
+}
+export async function publicTicketUpdates(ctx:Context,ticketIds:string[],limit:number):Promise<Entry[]> {
+  if(!ticketIds.length)return [];
+  if(!ctx.client)return demoStore().publicUpdates(ctx.actor,ticketIds,limit);
+  // Membership RLS remains enforced in addition to explicit public visibility and ticket scope.
+  const {data,error}=await ctx.client.from('ticket_updates').select('*').in('ticket_id',ticketIds).eq('visibility','public').order('created_at',{ascending:false}).order('id',{ascending:false}).limit(limit);
+  fail(error);return (data??[]).map(row=>({...row,author_name:row.author_name??'Team member'})) as Entry[];
 }
 export async function ticketDetail(ctx:Context,id:string):Promise<Detail> {
   if(!ctx.client)return demoStore().detail(ctx.actor,id);

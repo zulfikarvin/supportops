@@ -5,6 +5,7 @@ import { dirname } from 'node:path';
 import { demoRoles } from '../demo';
 import { assertChange, assertRead, TicketError, type Actor, type Ticket, type Detail, type Entry, type Attachment, type CreateInput, type ChangeInput } from './model';
 import { validateRecord, canReadRecord, derivePriority, type CaseRecord, type RecordInput } from './case-model';
+import type { WorkflowPlan } from './workflow';
 
 export const demoOrganizations = [
   { id: '10000000-0000-4000-8000-000000000001', name: 'Atlas Industries' },
@@ -18,6 +19,7 @@ export function demoActor(role: Actor['role']): Actor {
 }
 export class DemoStore {
   private db: DatabaseSync;
+  private inTransaction = false;
   constructor(path: string, seed = true) {
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
     this.db = new DatabaseSync(path);
@@ -34,9 +36,24 @@ export class DemoStore {
   }
   close() { this.db.close(); }
   private transaction<T>(work: () => T): T {
+    if (this.inTransaction) return work();
     this.db.exec('BEGIN IMMEDIATE');
+    this.inTransaction = true;
     try { const value = work(); this.db.exec('COMMIT'); return value; }
     catch (error) { this.db.exec('ROLLBACK'); throw error; }
+    finally { this.inTransaction = false; }
+  }
+  applyWorkflow(actor: Actor, id: string, expectedUpdatedAt: string, plan: WorkflowPlan) {
+    return this.transaction(() => {
+      if (!['support_analyst','data_engineer','product_tech'].includes(actor.role)) throw new TicketError('A technical role is required.', 403);
+      const ticket = this.raw(id); assertRead(actor, ticket);
+      if (ticket.status === 'Closed') throw new TicketError('This ticket is closed.', 409);
+      if (ticket.updated_at !== expectedUpdatedAt) throw new TicketError('This ticket changed. Reload before saving.', 409);
+      for (const record of plan.records) this.saveRecord(actor, id, record);
+      if (plan.change) this.change(actor, id, plan.change);
+      if (plan.update) this.addUpdate(actor, id, plan.update.body, plan.update.visibility);
+      return this.detail(actor, id);
+    });
   }
   private raw(id: string): Ticket {
     const row = this.db.prepare('SELECT data FROM tickets WHERE id=?').get(id) as { data: string } | undefined;
@@ -56,6 +73,20 @@ export class DemoStore {
   list(actor: Actor): Ticket[] {
     const records = this.db.prepare('SELECT data FROM tickets').all() as { data: string }[];
     return records.map(row => JSON.parse(row.data) as Ticket).filter(ticket => actor.role !== 'customer' || actor.organizationIds.includes(ticket.organization_id)).sort((a,b) => b.updated_at.localeCompare(a.updated_at));
+  }
+  dashboardEntries(actor: Actor, ticketIds: string[], publicOnly = false): { updates: Entry[]; activity: Entry[] } {
+    if (actor.role === 'customer') throw new TicketError('Internal workspace access required.', 403);
+    const allowed = new Set(this.list(actor).filter(ticket => ticketIds.includes(ticket.id)).map(ticket => ticket.id));
+    const rows = this.db.prepare('SELECT kind,data FROM entries').all() as { kind: string; data: string }[];
+    const entries = rows.map(row => ({ kind: row.kind, entry: JSON.parse(row.data) as Entry })).filter(row => allowed.has(row.entry.ticket_id) && (!publicOnly || row.entry.visibility === 'public'));
+    return { updates: entries.filter(row => row.kind === 'update').map(row => row.entry), activity: publicOnly ? [] : entries.filter(row => row.kind === 'activity').map(row => row.entry) };
+  }
+  publicUpdates(actor: Actor, ticketIds: string[], limit: number): Entry[] {
+    const allowed = new Set(this.list(actor).filter(ticket => ticketIds.includes(ticket.id)).map(ticket => ticket.id));
+    const rows = this.db.prepare("SELECT data FROM entries WHERE kind='update'").all() as { data: string }[];
+    return rows.map(row => JSON.parse(row.data) as Entry)
+      .filter(entry => allowed.has(entry.ticket_id) && entry.visibility === 'public')
+      .sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id)).slice(0, limit);
   }
   detail(actor: Actor, id: string): Detail {
     const ticket = this.raw(id); assertRead(actor, ticket);

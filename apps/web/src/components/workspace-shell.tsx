@@ -1,27 +1,30 @@
 import Link from 'next/link';
-import { LifeBuoy, LayoutDashboard, Tickets, Plus, ArrowLeftRight } from 'lucide-react';
+import { LifeBuoy, ChevronDown, ArrowLeftRight, LogOut, UsersRound } from 'lucide-react';
 import { logout } from '@/app/login/actions';
 import { isDemoMode } from '@/lib/demo';
 import type { Actor } from '@/lib/tickets/model';
-import { demoRoles } from '@/lib/demo';
+import { roleNames } from '@/lib/roles';
 import { LiveRefresh } from './live-refresh';
+import { WorkspaceNav } from './workspace-nav';
 export function WorkspaceShell({actor,children}:{actor:Actor;children:React.ReactNode}) {
-  return <div className="min-h-screen lg:grid lg:grid-cols-[240px_1fr]">
-    <aside className="border-b border-slate-200 bg-white p-6 lg:sticky lg:top-0 lg:h-screen lg:border-r lg:border-b-0">
-      <Link href="/workspace" className="flex items-center gap-2 text-xl font-bold"><LifeBuoy className="text-teal-700"/>SupportOps</Link>
-      <p className="mt-2 text-xs text-slate-500">{actor.role==='customer'?'Customer portal':'Internal workspace'}</p>
-      <nav aria-label="Workspace" className="mt-8 flex flex-wrap gap-2 lg:flex-col">
-        <Link className="nav-link" href="/workspace"><LayoutDashboard size={18}/>Overview</Link>
-        <Link className="nav-link" href="/workspace/tickets"><Tickets size={18}/>{actor.role==='customer'?'My tickets':'Ticket management'}</Link>
-        {actor.role==='customer'&&<Link className="nav-link" href="/workspace/tickets/new"><Plus size={18}/>Report an issue</Link>}
-        {actor.role!=='customer'&&<Link className="nav-link" href="/workspace/learning"><LayoutDashboard size={18}/>Problems & improvement</Link>}
-        {actor.role!=='customer'&&<Link className="nav-link" href={`/workspace/tickets?team=${encodeURIComponent(actor.role==='data_engineer'?'Data Engineering':actor.role==='product_tech'?'Product & Tech':actor.role==='customer_success'?'Customer Success':'Support')}`}><Tickets size={18}/>My team’s queue</Link>}
-      </nav>
-      <div className="mt-8 border-t border-slate-100 pt-5 lg:absolute lg:right-6 lg:bottom-6 lg:left-6"><p className="text-sm font-semibold">{actor.name}</p><p className="mt-1 text-xs text-slate-500">{demoRoles.find(item=>item.role===actor.role)?.title}</p>
-        {isDemoMode()&&<Link href="/login" className="mt-4 flex items-center gap-2 text-sm text-teal-700"><ArrowLeftRight size={14}/>Switch role</Link>}
-        <form action={logout}><button className="mt-3 text-sm text-slate-500 hover:text-slate-900">{isDemoMode()?'Exit demo':'Sign out'}</button></form>
+  const demo=isDemoMode();
+  const team=actor.role==='data_engineer'?'Data Engineering':actor.role==='product_tech'?'Product & Tech':actor.role==='customer_success'?'Customer Success':'Support';
+  const initials=actor.name.split(' ').slice(0,2).map(name=>name[0]).join('');
+  return <div className="app-shell">
+    <header className="app-topbar">
+      <Link href="/workspace" className="brand"><span className="brand-mark"><LifeBuoy size={22}/></span>SupportOps<span className="ml-1 h-1.5 w-1.5 rounded-full bg-teal-700"/></Link>
+      <WorkspaceNav customer={actor.role==='customer'}/>
+      <div className="flex items-center gap-4">
+        {demo&&<Link className="icon-link" href="/login" aria-label="Switch demo role" title="Switch demo role"><ArrowLeftRight size={17}/></Link>}
+        <details className="profile-menu"><summary><span className="profile-greeting">Hi, <strong>{actor.name.split(' ')[0]}</strong></span><span className="profile-avatar" aria-hidden="true">{initials}</span><ChevronDown size={13}/><span className="sr-only">Account menu for {actor.name}</span></summary>
+          <div className="profile-dropdown"><p className="font-semibold">{actor.name}</p><p className="mt-1 text-xs text-slate-500">{roleNames[actor.role]}</p>
+            {demo&&<Link href="/login"><ArrowLeftRight size={15}/>Switch demo role</Link>}
+            {actor.role!=='customer'&&<Link href={`/workspace/tickets?team=${encodeURIComponent(team)}`}><UsersRound size={15}/>My team’s queue</Link>}
+            <form action={logout}><button><LogOut size={15}/>{demo?'Exit demo':'Sign out'}</button></form>
+          </div>
+        </details>
       </div>
-    </aside>
-    <main className="min-w-0 p-5 sm:p-8 xl:p-10"><LiveRefresh demo={isDemoMode()}/>{children}</main>
+    </header>
+    <main className="workspace-content"><LiveRefresh demo={demo}/>{children}</main>
   </div>;
 }
