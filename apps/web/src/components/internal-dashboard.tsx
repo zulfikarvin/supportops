@@ -9,8 +9,7 @@ import type { Entry, Ticket } from '@/lib/tickets/model';
 import type { CaseRecord } from '@/lib/tickets/case-model';
 
 const text = (value: unknown) => typeof value === 'string' ? value.trim() : '';
-export async function InternalDashboard({ ctx, tickets, now }: { ctx: Context; tickets: Ticket[]; now: string }) {
-  const data = await internalDashboardData(ctx, tickets.filter(ticket => ticket.record_type !== 'service_request'));
+export async function InternalDashboard({ ctx, tickets, now, data }: { ctx: Context; tickets: Ticket[]; now: string; data: Awaited<ReturnType<typeof internalDashboardData>> }) {
   const model = internalDashboardModel(ctx.actor, tickets, data.records, data.updates, data.activity, data.people, now);
   const csm = ctx.actor.role === 'customer_success';
   const engineer = ctx.actor.role === 'data_engineer';

@@ -3,13 +3,18 @@ import { randomUUID } from 'node:crypto';
 import { demoStore, ticketDetail, directory, listTickets, type Context } from './service';
 import { dataSchemas, validateRecord, type CaseRecord, type RecordInput, reportDraft } from './case-model';
 import { TicketError } from './model';
+export class MissingStudyCaseMigration extends TicketError {
+ constructor(){super('The Supabase study-case migration has not been applied.',503);}
+}
 export async function records(ctx:Context,ticketId?:string):Promise<CaseRecord[]>{
  if(!ctx.client)return demoStore().records(ctx.actor,ticketId);
  if(ticketId)await ticketDetail(ctx,ticketId);
  const result:CaseRecord[]=[];
  for(let start=0;;start+=500){
   let query=ctx.client.from('case_records').select('*').order('updated_at',{ascending:false}).order('id').range(start,start+499);if(ticketId)query=query.eq('ticket_id',ticketId);
-  const {data,error}=await query;if(error)throw new TicketError('Unable to load case records. Apply the study-case migration.',503);
+  const {data,error}=await query;
+  if(error?.code==='PGRST205'||error?.code==='42P01')throw new MissingStudyCaseMigration();
+  if(error)throw new TicketError('Unable to load case records. Apply the study-case migration.',503);
   result.push(...(data??[]) as CaseRecord[]);if((data?.length??0)<500)return result;
  }
 }
