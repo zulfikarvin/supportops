@@ -24,7 +24,7 @@ beforeAll(async()=>{
  grant usage on schema public,auth,storage to authenticated;
  grant select on storage.objects to authenticated;`);
  const root=resolve(process.cwd(),'../../supabase');
- for(const file of ['migrations/202610270001_foundation.sql','seed.sql','migrations/202610280001_ticket_operations.sql','repairs/hosted-staff-workspace.sql','repairs/hosted-staff-workspace.sql'])await db.exec(readFileSync(resolve(root,file),'utf8'));
+ for(const file of ['migrations/202610270001_foundation.sql','seed.sql','repairs/hosted-staff-workspace.sql','repairs/hosted-staff-workspace.sql'])await db.exec(readFileSync(resolve(root,file),'utf8'));
  await db.exec(`insert into auth.users values ('${customer}'),('${analyst}'),('${engineer}'),('${csm}');
  insert into public.profiles(id,display_name,role) values ('${customer}','Atlas customer','customer'),('${analyst}','Analyst','support_analyst'),('${engineer}','Engineer','data_engineer'),('${csm}','CSM','customer_success');
  insert into public.organization_memberships(organization_id,user_id) values ('${atlas}','${customer}');`);
