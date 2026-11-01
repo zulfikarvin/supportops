@@ -20,6 +20,16 @@ function setup() {
 }
 afterEach(() => stores.splice(0).forEach(store => store.close()));
 describe('focused analyst workflow', () => {
+  it.each(['support_analyst', 'data_engineer', 'product_tech'] as const)('resolves as %s with two facts, one restoration record, and customer-only closure', role => {
+    const { store, ticket, run } = setup();
+    const result = run({ action: 'resolve', expected_updated_at: ticket.updated_at, resolution_summary: 'Updated the Workday integration mapping.', verification_result: 'Retried the synthetic import; all rows were accepted.', verified: true, record_version: null }, demoActor(role));
+    expect(result.ticket.status).toBe('Resolved');
+    expect(result.updates).toHaveLength(0);
+    expect(store.records(analyst, ticket.id).filter(record => record.kind === 'restoration')).toHaveLength(1);
+    expect(() => store.confirm(demoActor(role), ticket.id)).toThrow();
+    store.confirm(customer, ticket.id);
+    expect(store.detail(customer, ticket.id).ticket.status).toBe('Closed');
+  });
   it('assesses, calculates priority, sets one owner/team, and moves Reported to Triaged in one save', () => {
     const { store, ticket, triage, run } = setup();
     const result = run(triage);

@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { AnalystWorkflow } from './analyst-workflow';
 import { DataDiagnosis } from './data-diagnosis';
+import { TicketActions } from './ticket-actions';
+import { CaseWorkspace } from './case-workspace';
 import { DemoStore, demoActor, demoOrganizations, demoPeople } from '@/lib/tickets/demo-store';
 import { createSchema } from '@/lib/tickets/model';
 import type { CaseRecord } from '@/lib/tickets/case-model';
@@ -13,6 +15,23 @@ function fixture() {
   finally { store.close(); }
 }
 describe('focused technical workflow rendering', () => {
+  it.each(['support_analyst', 'data_engineer', 'product_tech'] as const)('gives %s one resolution form with two meaningful inputs and no legacy save path', role => {
+    const ticket = fixture();
+    const actor = demoActor(role);
+    const html = renderToStaticMarkup(<><AnalystWorkflow actor={actor} ticket={ticket} records={[]} people={demoPeople}/><TicketActions actor={actor} ticket={ticket}/><CaseWorkspace actor={actor} ticket={ticket} records={[]} allRecords={[]} people={demoPeople} tickets={[ticket]} attachments={[]}/></>);
+    expect(html.match(/name="resolution_summary"/g)).toHaveLength(1);
+    expect(html.match(/name="verification_result"/g)).toHaveLength(1);
+    for (const obsolete of ['name="explanation"', 'name="verified"', 'name="restoration_method"', 'name="closure_evidence"', 'Save investigation']) expect(html).not.toContain(obsolete);
+    const workflow = renderToStaticMarkup(<AnalystWorkflow actor={actor} ticket={ticket} records={[]} people={demoPeople}/>);
+    expect(workflow).not.toContain('<option>Resolved</option>');
+    expect(html).toContain('Confirm recovery &amp; resolve');
+    expect(html).toContain('Advanced investigation details (optional)');
+    if (role === 'product_tech') {
+      expect(html).not.toContain('name="business_impact"');
+      expect(html).toContain('Product &amp; Tech workflow');
+      expect(html).toContain('1. Review &amp; investigate');
+    }
+  });
   it('gives Data Engineering three clear steps without editable support assessment or duplicate resolution fields', () => {
     const ticket = fixture();
     const html = renderToStaticMarkup(<AnalystWorkflow actor={demoActor('data_engineer')} ticket={ticket} records={[]} people={demoPeople}/>);

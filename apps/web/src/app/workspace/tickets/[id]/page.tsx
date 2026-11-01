@@ -20,7 +20,7 @@ export default async function DetailPage({params,searchParams}:{params:Promise<{
   const detail=await ticketDetail(ctx,id).catch(pageError);const {people}=await directory(ctx);const {ticket}=detail;const {saved}=await searchParams;
   const caseRecords=await loadRecords(ctx,id);const allRecords=ctx.actor.role==='customer'?caseRecords:await loadRecords(ctx);const allTickets=ctx.actor.role==='customer'?[ticket]:await listTickets(ctx);
   const timeline=[...detail.activity,...detail.updates].sort((a,b)=>a.created_at.localeCompare(b.created_at));
-  const focused=ctx.actor.role==='support_analyst'||ctx.actor.role==='data_engineer';
+  const focused=['support_analyst','data_engineer','product_tech'].includes(ctx.actor.role);
   const caseWorkspace=<CaseWorkspace actor={ctx.actor} ticket={ticket} records={caseRecords} allRecords={allRecords} people={people} tickets={allTickets} attachments={detail.attachments}/>;
   return <><Link className="text-sm text-teal-700" href="/workspace/tickets">← Back to tickets</Link><div className="mt-6"><p className="eyebrow">SUP-{ticket.number} · {ticket.organization_name}</p><h1 className="page-title">{ticket.title}</h1><div className="mt-4 flex flex-wrap items-center gap-4"><StatusBadge value={(ticket.record_type ?? "incident").replace("_", " ")}/><StatusBadge value={ticket.status}/><PriorityBadge value={ticket.priority}/><span className="text-sm text-slate-500">{ticket.category}</span></div></div>
     {saved==='created'&&<p role="status" className="mt-6 rounded-lg bg-emerald-50 p-4 text-sm text-emerald-800">Your issue has been reported. Follow progress and reply here.</p>}
